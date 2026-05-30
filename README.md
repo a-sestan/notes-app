@@ -560,6 +560,19 @@ aws ec2 delete-key-pair --key-name notes-app-key
 | RDS not accepting connections | Still provisioning | Wait longer; check `aws rds describe-db-instances` status |
 | `docker build` fails on EC2 | Out of disk space or network issue | Use larger instance type or check security group egress rules |
 
+## Dokumentacija (Bosanski)
+
+Detaljna tehnička dokumentacija na bosanskom jeziku nalazi se u [`DOKUMENTACIJA.md`](DOKUMENTACIJA.md):
+- Arhitekturni dijagram sistema (VPC, subneti, EC2, RDS, S3, ALB, Security Groups)
+- Procjena troškova AWS servisa (mjesečni troškovi, uštede)
+- Koraci za pokretanje (Terraform, ručno, lokalno)
+- Kako očistiti resurse nakon testiranja
+- Opis izazova i rješenja tokom deployment-a
+
+## Video snimak
+
+Uputstvo za snimanje video demonstracije: [`VIDEO_GUIDE.md`](VIDEO_GUIDE.md)
+
 ## Project Structure
 
 ```
