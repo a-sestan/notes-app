@@ -1,0 +1,3 @@
+@echo off
+echo Brisem sve resurse aplikacije...
+docker compose down -v --rmi all

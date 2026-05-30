@@ -1,0 +1,55 @@
+
+services:
+
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend/index.html:/usr/share/nginx/html/index.html
+      - ./frontend/style.css:/usr/share/nginx/html/style.css
+      - ./frontend/script.js:/usr/share/nginx/html/script.js
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - backend
+    restart: always
+    networks:
+      - notes_net
+
+  backend:
+    build: ./backend
+    environment:
+      DB_HOST: db
+      DB_USER: notesuser
+      DB_PASSWORD: notespass
+      DB_NAME: notesdb
+      DB_PORT: 3307
+    volumes:
+      - ./backend/app.py:/app/app.py
+    depends_on:
+      - db
+    restart: always
+    networks:
+      - notes_net
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: notesdb
+      MYSQL_USER: notesuser
+      MYSQL_PASSWORD: notespass
+      MYSQL_TCP_PORT: 3307
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database.sql:/docker-entrypoint-initdb.d/database.sql
+    restart: always
+    networks:
+      - notes_net
+
+volumes:
+  db_data:
+
+networks:
+  notes_net:
+    driver: bridge

@@ -1,0 +1,3 @@
+@echo off
+echo Zaustavljam servise (podaci ostaju sačuvani)...
+docker compose stop

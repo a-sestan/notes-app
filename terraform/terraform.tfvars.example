@@ -1,0 +1,4 @@
+db_password      = "YourRDSpassword123"
+key_name         = "your-key-pair-name"
+vpc_id           = "vpc-xxxxxxxx"
+public_subnet_ids = ["subnet-xxxxx1", "subnet-xxxxx2"]

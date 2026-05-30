@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="bs">
+  
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moje Bilješke</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </div>
+      <div>
+        <div class="app-title">Moje bilješke</div>
+        <div class="app-sub">Tvoj lični prostor za ideje</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat stat-0">
+      <div class="stat-label">Ukupno</div>
+      <div class="stat-val" id="s-total">0</div>
+    </div>
+    <div class="stat stat-1">
+      <div class="stat-label">Zakačene</div>
+      <div class="stat-val" id="s-pinned">0</div>
+    </div>
+    <div class="stat stat-2">
+      <div class="stat-label">Ova hefta</div>
+      <div class="stat-val" id="s-week">0</div>
+    </div>
+    <div class="stat stat-3">
+      <div class="stat-label">Znakova</div>
+      <div class="stat-val" id="s-chars">0</div>
+    </div>
+  </div>
+
+  <div class="composer">
+    <div class="composer-title-row">
+      <input type="text" id="inp-title" placeholder="Naslov bilješke...">
+      <div class="color-picker" id="color-picker">
+        <div class="color-dot selected" data-c="0" style="background:#c084fc"></div>
+        <div class="color-dot" data-c="1" style="background:#f472b6"></div>
+        <div class="color-dot" data-c="2" style="background:#38bdf8"></div>
+        <div class="color-dot" data-c="3" style="background:#4ade80"></div>
+        <div class="color-dot" data-c="4" style="background:#fbbf24"></div>
+        <div class="color-dot" data-c="5" style="background:#f87171"></div>
+      </div>
+    </div>
+    <textarea id="inp-content" rows="3" placeholder="Šta ti je na umu? (Ctrl+Enter za dodavanje)"></textarea>
+    <div class="char-count" id="char-count">0 znakova</div>
+    <div class="composer-footer">
+      <div class="tag-pills" id="tag-picker">
+        <button class="tag-pill" data-tag="posao">💼 Posao</button>
+        <button class="tag-pill" data-tag="privatno">🌸 Privatno</button>
+        <button class="tag-pill" data-tag="ideje">💡 Ideje</button>
+        <button class="tag-pill" data-tag="todo">✅ To-do</button>
+      </div>
+      <button class="add-btn" onclick="addNote()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Dodaj bilješku
+      </button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="filter-row" id="filters">
+      <button class="filter-btn active" data-filter="sve">Sve</button>
+      <button class="filter-btn" data-filter="pinned">📌 Zakačene</button>
+      <button class="filter-btn" data-filter="posao">💼 Posao</button>
+      <button class="filter-btn" data-filter="privatno">🌸 Privatno</button>
+      <button class="filter-btn" data-filter="ideje">💡 Ideje</button>
+      <button class="filter-btn" data-filter="todo">✅ To-do</button>
+    </div>
+    <div class="right-tools">
+      <div class="search-box">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="search" placeholder="Pretraži...">
+      </div>
+      <select class="sort-btn" id="sort-sel">
+        <option value="new">Najnovije</option>
+        <option value="old">Najstarije</option>
+        <option value="az">A → Z</option>
+        <option value="len">Najduže</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="notes-grid" id="notes-list"></div>
+
+</div>
+
+<div id="edit-modal" class="modal-overlay">
+  <div class="modal">
+    <h3 id="edit-title-display"></h3>
+    <textarea id="edit-text" rows="5" placeholder="Sadržaj..."></textarea>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Odustani</button>
+      <button class="btn-save" onclick="saveEdit()">Sačuvaj</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
