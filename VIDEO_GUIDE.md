@@ -106,7 +106,19 @@
 
 4. Kliknite **Properties** tab, pa skrolajte do **Static website hosting** — pokažite URL
 
-### 2e. Security Groups — sumarno (15s)
+### 2e. VPC i subneti — mrežna infrastruktura (30s)
+
+1. U polje za pretragu upišite **VPC** i kliknite
+2. Sa lijeve strane kliknite **Your VPCs** — vidite VPC (može biti default ili `notes-app-vpc` ako je kreiran kroz Terraform)
+3. Kliknite **Subnets** — vidite najmanje 2 public subnet-a (sa mapiranjem javne IP adrese) i 2 private subnet-a (bez javne IP)
+4. Pokažite route tables:
+   - **Public RT:** `0.0.0.0/0` → Internet Gateway
+   - **Private RT:** `0.0.0.0/0` → NAT Gateway
+
+**Šta govorite:**
+> "VPC je izolovana mreža u kojoj su svi resursi. Imamo dva public subnet-a (u različitim Availability Zones) za ALB i EC2 instance, i dva private subnet-a za RDS bazu. Public subnet-i imaju pristup internetu preko Internet Gateway-a, dok private subnet-i koriste NAT Gateway za izlazak na internet (npr. za Docker pull), ali nisu direktno dostupni izvana."
+
+### 2f. Security Groups — sumarno (15s)
 
 1. U pretragu upišite **Security Groups** (ili **VPC** → Security Groups)
 2. Pokažite 3 grupe sa opisom:
@@ -205,9 +217,9 @@ curl -s "http://notes-alb-2018448528.us-east-1.elb.amazonaws.com/api/notes"
 1. Otvorite tab sa `https://github.com/a-sestan/notes-app`
 2. Otvorite `README.md` da vidite ASCII dijagram arhitekture
 
-### 5b. Objasnite arhitekturu (1 min)
+### 5b. Objasnite arhitekturu (1.5 min)
 
-Pokažite na ekranu sljedeći dijagram (nacrtajte ga na papiru ili koristite README):
+Pokažite na ekranu sljedeći dijagram:
 
 ```
 Internet
@@ -217,18 +229,75 @@ Internet
   │
   └── http://notes-alb-XXXXXXXX.us-east-1.elb.amazonaws.com
         └── ALB (port 80)
-              ├── Rule: /api/*  →  TargetGroup (port 5000)
-              │                     ├── EC2 #1 → Docker: Flask backend
-              │                     └── EC2 #2 → Docker: Flask backend
-              │                                    │
-              └── Default: redirect to S3 website    └── RDS MySQL
+              │
+              ├── Default: HTTP 301 redirect → S3 website
+              │
+              └── Rule: /api/*  →  TargetGroup (port 5000)
+                                    │
+                          ┌─────────┴─────────┐
+                          │                   │
+                    EC2 #1 (AZ-a)        EC2 #2 (AZ-b)
+                    ┌──────────┐        ┌──────────┐
+                    │ Docker   │        │ Docker   │
+                    │ Flask    │        │ Flask    │
+                    └────┬─────┘        └────┬─────┘
+                          │                   │
+                          └─────────┬─────────┘
+                                    │
+                             ┌──────┴──────┐
+                             │  RDS MySQL  │
+                             │ (private    │
+                             │  subnet)    │
+                             └─────────────┘
+
+══════════════  VPC 10.0.0.0/16  ════════════════
+
+  Public subnet (AZ-a)      Public subnet (AZ-b)
+  ┌─────────────────┐      ┌─────────────────┐
+  │ ALB + EC2 #1    │      │ ALB + EC2 #2    │
+  │ IGW → internet  │      │ IGW → internet  │
+  └─────────────────┘      └─────────────────┘
+
+  Private subnet (AZ-a)    Private subnet (AZ-b)
+  ┌─────────────────┐      ┌─────────────────┐
+  │ RDS (MySQL)     │      │ (multi-AZ      │
+  │ NAT → internet  │      │  standby)       │
+  └─────────────────┘      └─────────────────┘
 ```
 
 **Objašnjenje koje govorite:**
 
-> "Korisnik otvara S3 URL u browseru. Frontend (HTML/CSS/JS) se učitava sa S3 bucketa. Kada korisnik kreira bilješku, JavaScript šalje POST zahtjev na ALB DNS (http://alb/api/notes). ALB ima pravilo: ako putanja počinje sa /api/, proslijedi zahtjev target grupi. Target grupa ravnomjerno raspoređuje zahtjeve na dvije EC2 instance (round-robin). Svaka instanca pokreće Docker kontejner sa Flask aplikacijom. Flask se povezuje na RDS MySQL bazu i izvršava SQL upite.
+> "Cijeli sistem se nalazi unutar VPC mreže (10.0.0.0/16) koja je podijeljena na četiri subnet-a: dva public i dva private, raspoređena u dvije Availability Zone (us-east-1a i us-east-1b).
 >
-> Ako jedna instanca padne, ALB je automatski uklanja iz rotacije (zdravstveni check na /health) i sav promet ide na drugu. Kada se instanca vrati, automatski se ponovo dodaje."
+> **Public subnet-i** sadrže ALB i EC2 instance. Pristup internetu imaju preko Internet Gateway-a. ALB prima sav promet na portu 80 i:
+> - Ako je putanja `/api/*` → prosljeđuje backend target grupi
+> - Sve ostalo → HTTP 301 redirect na S3 website
+>
+> **Private subnet-i** sadrže RDS MySQL bazu. One nemaju direktan pristup internetu, već koriste NAT Gateway za izlazne veze (npr. za software updates). RDS prima konekcije samo sa backend security group-a na portu 3306.
+>
+> **EC2 instance** (2 × t2.micro) pokreću Docker kontejner sa Flask aplikacijom. Target grupa ravnomjerno raspoređuje zahtjeve (round-robin). Ako jedna instanca padne, ALB je automatski uklanja nakon neuspjelih health check-ova i sav promet ide na zdravu instancu.
+>
+> **S3 bucket** hostuje statički frontend (HTML/CSS/JS). Ovo je najjeftiniji način hostinga i ne zahtijeva server.
+>
+> **Terraform** definiše svaki resurs kao kod — VPC, subneti, security grupe, EC2, RDS, S3, ALB. Ovo omogućava ponovljiv deployment u bilo kom AWS account-u sa samo `terraform apply`."
+
+### 5c. Prikažite Terraform strukturu (30s)
+
+1. U GitHub repu otvorite folder `terraform/`
+2. Pokažite organizaciju fajlova:
+   - `main.tf` — VPC, subneti, route tables, IGW, NAT Gateway, provideri
+   - `variables.tf` — sve varijable (region, instance_type, db_username/password/name, key_name)
+   - `outputs.tf` — izlazne vrijednosti (frontend_url, api_url, alb_dns, rds_endpoint, s3_bucket_name)
+   - `provider.tf` — AWS provider
+   - `s3.tf` — S3 bucket + policy + upload fajlova (sa automatskim popunjavanjem API_BASE)
+   - `rds.tf` — RDS MySQL + db subnet group
+   - `ec2_alb.tf` — EC2 instance + ALB + Target Group + listener + routing pravilo
+   - `security_groups.tf` — 3 security grupe sa pravilima
+   - `userdata.sh` — script koji se izvršava na EC2 (instalira Docker, pokreće Flask)
+   - `terraform.tfvars.example` — primjer konfiguracije
+
+**Šta govorite:**
+> "Terraform kod je organizovan u zasebne fajlove po odgovornostima. Sve promjenjive vrijednosti su izdvojene u variables.tf, a output-i u outputs.tf. Nastavno osoblje može testirati Terraform na svom AWS account-u: samo kopiraju terraform.tfvars.example u terraform.tfvars, popune key_name i db_password, i pokrenu terraform init && terraform apply. Kod će kreirati kompletnu infrastrukturu — 35 resursa — za ~10 minuta."
 
 ### 5c. Pokažite Terraform kod (30s)
 
@@ -277,17 +346,18 @@ Internet
 - [ ] Kreirali ste bar jednu bilješku i ona se pojavila
 - [ ] Izmijenili ste bilješku
 - [ ] Obrisali ste bilješku
-- [ ] Pokazali ste EC2 instance (2 running)
+- [ ] Pokazali ste EC2 instance (2 running, jedna po AZ)
 - [ ] Pokazali ste ALB listener pravilo (/api/* → backend)
 - [ ] Pokazali ste Target Group (2 healthy targets)
 - [ ] Pokazali ste RDS bazu (status Available)
 - [ ] Pokazali ste S3 bucket (index.html, style.css, script.js)
+- [ ] Pokazali ste VPC i subnet-e (2 public + 2 private)
 - [ ] Pokazali ste Security Groups (3 grupe sa pravilima)
 - [ ] Zaustavili ste jednu EC2 instancu
 - [ ] Pokazali ste da aplikacija i dalje radi
 - [ ] Ponovo pokrenuli instancu
-- [ ] Objasnili ste arhitekturu (dijagram)
-- [ ] Pokazali ste Terraform kod
+- [ ] Objasnili ste arhitekturu (dijagram sa VPC, subnetima, AZ-ovima)
+- [ ] Pokazali ste Terraform kod (main.tf, variables.tf, outputs.tf, ec2_alb.tf, rds.tf, s3.tf, security_groups.tf)
 - [ ] Snimak traje 5-10 minuta
 - [ ] Snimak je uploadan na Google Drive/YouTube (ne-LinkedIn)
 - [ ] Link ka snimku je dodat u GitHub README.md
