@@ -34,9 +34,63 @@ Internet
 
 ---
 
-## Automated Deployment (Recommended)
+## Option A: Terraform (Infrastructure as Code)
 
-### Option A: PowerShell (Windows)
+Terraform kod automatski kreira kompletnu AWS infrastrukturu. Nastavno osoblje može ga testirati na svom AWS account-u.
+
+### Prerequisites
+
+- [Terraform](https://developer.hashicorp.com/terraform/downloads) ≥ 1.5
+- AWS CLI konfigurisan sa kredencijalima (`aws configure`)
+- EC2 key pair kreiran u AWS account-u
+
+### Pokretanje
+
+```bash
+cd terraform
+
+# 1. Kopiraj i podesi varijable
+cp terraform.tfvars.example terraform.tfvars
+# Uredi terraform.tfvars — postavi key_name i db_password
+
+# 2. Inicijalizuj Terraform
+terraform init
+
+# 3. Pregledaj šta će se kreirati
+terraform plan
+
+# 4. Kreiraj infrastrukturu
+terraform apply -auto-approve
+
+# 5. Kad završi, ispisaće se:
+#    frontend_url — otvori u browseru
+#    api_url      — API endpoint
+#    alb_dns      — Load Balancer DNS
+#    rds_endpoint — RDS MySQL endpoint
+#    s3_bucket_name — S3 bucket
+```
+
+### Šta Terraform kreira
+
+| Resurs | Detalji |
+|--------|---------|
+| **VPC** | `10.0.0.0/16` sa 2 public i 2 private subnet-a |
+| **Internet Gateway** | Za public subnet-e |
+| **NAT Gateway** | Za private subnet-e (RDS) |
+| **Security Groups** | ALB (port 80), Backend (port 5000), RDS (port 3306) |
+| **EC2 × 2** | `t2.micro` sa Docker-om i Flask backendom |
+| **RDS MySQL** | `db.t3.micro` u private subnet-ima |
+| **S3 bucket** | Statički hosting za frontend (HTML/CSS/JS) |
+| **ALB + Target Group** | Path-based routing: `/api/*` → backend, ostalo → S3 |
+
+### Brisanje
+
+```bash
+cd terraform
+terraform destroy -auto-approve
+```
+
+## Option B: PowerShell (Windows)
 
 ```powershell
 cd scripts
@@ -56,7 +110,7 @@ Optional parameters:
 | `-DbPassword` | `Admin12345` | RDS MySQL password |
 | `-KeyPairName` | `notes-app-key` | EC2 key pair name |
 
-### Option B: Bash (Linux / macOS / WSL)
+### Option C: Bash (Linux / macOS / WSL)
 
 ```bash
 cd scripts
@@ -65,13 +119,12 @@ chmod +x deploy-all.sh
 ./deploy-all.sh \
     -k "ASIAVRZLLA3A..." \
     -s "CNYSalZn..." \
-    -t "IQoJb3JpZ2lu..." \
     -p "/path/to/lab-key.pem"
 ```
 
 Optional flags: `-r us-east-1 -d Admin12345`
 
-### What the script does
+### What the scripts do
 
 The script provisions all 8 steps automatically:
 

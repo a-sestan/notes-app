@@ -1,7 +1,7 @@
 resource "aws_security_group" "alb" {
   name        = "notes-alb-sg"
   description = "Allow HTTP from internet to ALB"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.main.id
 
   ingress {
     from_port   = 80
@@ -21,7 +21,7 @@ resource "aws_security_group" "alb" {
 resource "aws_security_group" "backend" {
   name        = "notes-backend-sg"
   description = "Allow traffic from ALB to backend"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.main.id
 
   ingress {
     from_port       = 5000
@@ -41,7 +41,7 @@ resource "aws_security_group" "backend" {
 resource "aws_security_group" "rds" {
   name        = "notes-rds-sg"
   description = "Allow MySQL from backend instances"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.main.id
 
   ingress {
     from_port       = 3306

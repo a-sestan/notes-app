@@ -95,7 +95,7 @@ def init_db():
             print(f"Cekam bazu... ({e})")
             time.sleep(3)
 
-@app.route('/notes', methods=['GET'])
+@app.route('/api/notes', methods=['GET'])
 def get_notes():
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
@@ -107,7 +107,7 @@ def get_notes():
         n['pinned'] = bool(n['pinned'])
     return jsonify(notes)
 
-@app.route('/notes', methods=['POST'])
+@app.route('/api/notes', methods=['POST'])
 def add_note():
     data = request.json
     conn = get_db()
@@ -121,7 +121,7 @@ def add_note():
     conn.close()
     return jsonify({'status': 'ok', 'id': new_id}), 201
 
-@app.route('/notes/<int:note_id>', methods=['PUT'])
+@app.route('/api/notes/<int:note_id>', methods=['PUT'])
 def update_note(note_id):
     data = request.json
     conn = get_db()
@@ -134,7 +134,7 @@ def update_note(note_id):
     conn.close()
     return jsonify({'status': 'ok'})
 
-@app.route('/notes/<int:note_id>', methods=['DELETE'])
+@app.route('/api/notes/<int:note_id>', methods=['DELETE'])
 def delete_note(note_id):
     conn = get_db()
     cursor = conn.cursor()
@@ -143,7 +143,7 @@ def delete_note(note_id):
     conn.close()
     return jsonify({'status': 'ok'})
 
-@app.route('/notes/<int:note_id>/pin', methods=['PATCH'])
+@app.route('/api/notes/<int:note_id>/pin', methods=['PATCH'])
 def toggle_pin(note_id):
     conn = get_db()
     cursor = conn.cursor()

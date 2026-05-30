@@ -26,6 +26,9 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Terraform
+.terraform/
+
 # Temp
 temp/
 tmp/

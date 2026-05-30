@@ -48,18 +48,14 @@ resource "aws_s3_object" "style_css" {
 resource "aws_s3_object" "script_js" {
   bucket       = aws_s3_bucket.frontend.id
   key          = "script.js"
-  source       = "../frontend/script.js"
   content_type = "application/javascript"
+  content      = replace(
+    file("../frontend/script.js"),
+    "API_BASE = ''",
+    "API_BASE = 'http://${aws_lb.main.dns_name}'"
+  )
 }
 
 resource "random_id" "suffix" {
   byte_length = 4
-}
-
-output "s3_bucket_url" {
-  value = aws_s3_bucket_website_configuration.frontend.website_endpoint
-}
-
-output "s3_bucket_name" {
-  value = aws_s3_bucket.frontend.bucket
 }
