@@ -8,7 +8,7 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
-# EC2 instances (one per public subnet)
+
 resource "aws_instance" "backend" {
   count = 2
 
@@ -31,7 +31,7 @@ resource "aws_instance" "backend" {
   }
 }
 
-# Application Load Balancer
+# Load Balancer
 resource "aws_lb" "main" {
   name               = "notes-alb"
   internal           = false
@@ -64,7 +64,7 @@ resource "aws_lb_target_group_attachment" "backend" {
   port             = 5000
 }
 
-# Listener: default → redirect to S3 website
+
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
@@ -82,7 +82,7 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# Rule: /api/* → forward to backend target group
+
 resource "aws_lb_listener_rule" "api" {
   listener_arn = aws_lb_listener.http.arn
   priority     = 1
