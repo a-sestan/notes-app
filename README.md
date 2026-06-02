@@ -72,11 +72,7 @@ terraform destroy -auto-approve
 | Frontend | `http://<bucket>.s3-website-us-east-1.amazonaws.com` |
 | API | `http://<alb-dns>/api/notes` |
 
-## Dokumentacija
 
-- [`DOKUMENTACIJA.md`](DOKUMENTACIJA.md) — tehnička dokumentacija, troškovi, izazovi (bosanski)
-- [`VIDEO_GUIDE.md`](VIDEO_GUIDE.md) — uputstvo za snimanje odbrane
-- [`terraform/README.md`](terraform/README.md) — kratak Terraform vodič
 
 ## Struktura projekta
 
