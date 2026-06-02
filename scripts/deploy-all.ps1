@@ -38,12 +38,10 @@ $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $TempDir = "$env:TEMP\notes-app-deploy"
 New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 
-# ─── Colour helpers ───
 function Write-Step($s) { Write-Host "`n=== $s ===" -ForegroundColor Cyan }
 function Write-Ok($s)  { Write-Host "  ✓ $s" -ForegroundColor Green }
 function Write-Wait($s){ Write-Host "  ⏳ $s ..." -ForegroundColor Yellow }
 
-# ─── 0. Configure AWS CLI ───
 Write-Step "[0/8] Configuring AWS CLI"
 aws configure set aws_access_key_id     $AccessKey
 aws configure set aws_secret_access_key $SecretKey
@@ -52,7 +50,6 @@ aws configure set region                $Region
 $AccountId = aws sts get-caller-identity --query "Account" --output text
 Write-Ok "Account: $AccountId / Region: $Region"
 
-# ─── 1. Import SSH key pair ───
 Write-Step "[1/8] Importing SSH key pair"
 if (-not (Test-Path $KeyPrivatePath)) { throw "Private key not found: $KeyPrivatePath" }
 $pubKey = ssh-keygen -y -f $KeyPrivatePath 2>$null
@@ -61,7 +58,6 @@ Set-Content -Path $pubKeyFile -Value $pubKey -NoNewline
 aws ec2 import-key-pair --key-name $KeyPairName --public-key-material "fileb://$pubKeyFile" 2>$null
 Write-Ok "Key pair: $KeyPairName"
 
-# ─── 2. Discover VPC & subnets ───
 Write-Step "[2/8] Discovering VPC & subnets"
 $VpcId = aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text
 Write-Ok "VPC: $VpcId"
@@ -69,25 +65,21 @@ $SubnetIds = aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VpcId" "Nam
 $SubnetArr = $SubnetIds -split "`t"
 Write-Ok "Subnets: $($SubnetArr -join ', ')"
 
-# ─── 3. Create Security Groups ───
 Write-Step "[3/8] Creating Security Groups"
-# ALB SG
+
 $AlbSgId = aws ec2 create-security-group --group-name notes-alb-sg --description "ALB SG" --vpc-id $VpcId --query "GroupId" --output text
 aws ec2 authorize-security-group-ingress --group-id $AlbSgId --protocol tcp --port 80 --cidr 0.0.0.0/0 | Out-Null
 Write-Ok "ALB SG: $AlbSgId"
 
-# Backend SG
 $BackSgId = aws ec2 create-security-group --group-name notes-backend-sg --description "Backend SG" --vpc-id $VpcId --query "GroupId" --output text
 aws ec2 authorize-security-group-ingress --group-id $BackSgId --protocol tcp --port 5000 --source-group $AlbSgId | Out-Null
 aws ec2 authorize-security-group-ingress --group-id $BackSgId --protocol tcp --port 22 --cidr 0.0.0.0/0 | Out-Null
 Write-Ok "Backend SG: $BackSgId"
 
-# RDS SG
 $RdsSgId = aws ec2 create-security-group --group-name notes-rds-sg --description "RDS SG" --vpc-id $VpcId --query "GroupId" --output text
 aws ec2 authorize-security-group-ingress --group-id $RdsSgId --protocol tcp --port 3306 --source-group $BackSgId | Out-Null
 Write-Ok "RDS SG: $RdsSgId"
 
-# ─── 4. Create RDS MySQL ───
 Write-Step "[4/8] Creating RDS MySQL instance"
 aws rds create-db-instance `
     --db-instance-identifier notes-db `
@@ -105,10 +97,8 @@ aws rds wait db-instance-available --db-instance-identifier notes-db
 $RdsEndpoint = aws rds describe-db-instances --db-instance-identifier notes-db --query "DBInstances[0].Endpoint.Address" --output text
 Write-Ok "RDS endpoint: $RdsEndpoint"
 
-# Wait a bit more for RDS to accept connections
 Start-Sleep -Seconds 30
 
-# ─── 5. Create S3 bucket & upload frontend ───
 Write-Step "[5/8] Creating S3 bucket & uploading frontend"
 $BucketSuffix = Get-Random -Minimum 10000 -Maximum 99999
 $BucketName = "notes-app-frontend-$BucketSuffix"
@@ -134,13 +124,10 @@ aws s3api put-public-access-block --bucket $BucketName --public-access-block-con
 $S3Url = "http://$BucketName.s3-website-$Region.amazonaws.com"
 Write-Ok "S3 bucket: $BucketName"
 
-# ─── 6. Launch EC2 instances ───
 Write-Step "[6/8] Launching 2 EC2 instances"
 
-# Read the local app.py to embed in userdata
 $AppPyContent = Get-Content "$ProjectRoot\backend\app.py" -Raw
 
-# Build userdata script
 $UserData = @'
 #!/bin/bash
 set -ex
@@ -182,7 +169,6 @@ docker run -d \
 $UserDataFile = "$TempDir\userdata.sh"
 Set-Content -Path $UserDataFile -Value $UserData -NoNewline
 
-# Get Amazon Linux 2 AMI
 $AmiId = aws ssm get-parameters --names /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2 --query "Parameters[0].Value" --output text
 Write-Ok "AMI: $AmiId"
 
@@ -207,7 +193,6 @@ aws ec2 wait instance-running --instance-ids $InstanceIds
 $InstanceIps = aws ec2 describe-instances --instance-ids $InstanceIds --query "Reservations[].Instances[].PrivateIpAddress" --output text
 Write-Ok "Instances running: $InstanceIps"
 
-# ─── 7. Create ALB, Target Group, Listener ───
 Write-Step "[7/8] Creating ALB & Target Group"
 
 $TgArn = aws elbv2 create-target-group `
@@ -237,7 +222,6 @@ $AlbArn = aws elbv2 create-load-balancer `
 $AlbDns = aws elbv2 describe-load-balancers --load-balancer-arns $AlbArn --query "LoadBalancers[0].DNSName" --output text
 Write-Ok "ALB DNS: http://$AlbDns"
 
-# Create default redirect rule
 $RedirectAction = @"
 [{
   "Type": "redirect",
@@ -259,7 +243,6 @@ $ListenerArn = aws elbv2 create-listener `
     --query "Listeners[0].ListenerArn" `
     --output text
 
-# Create /api/* path rule pointing to backend
 $ApiAction = @"
 [{
   "Type": "forward",
@@ -281,7 +264,6 @@ aws elbv2 create-rule `
 
 Write-Ok "ALB listener configured"
 
-# ─── 8. Update API_BASE & upload frontend ───
 Write-Step "[8/8] Updating frontend & uploading to S3"
 
 $ScriptJsPath = "$ProjectRoot\frontend\script.js"
@@ -292,11 +274,9 @@ aws s3 cp "$ProjectRoot\frontend\style.css"  "s3://$BucketName/style.css"  --con
 aws s3 cp "$ProjectRoot\frontend\script.js"  "s3://$BucketName/script.js"  --content-type "application/javascript" | Out-Null
 Write-Ok "Frontend uploaded to S3"
 
-# Wait for ALB to propagate and targets to become healthy
 Write-Wait "Waiting for targets to become healthy"
 Start-Sleep -Seconds 90
 
-# ─── Summary ───
 Write-Host "`n============================================================" -ForegroundColor Cyan
 Write-Host "  DEPLOYMENT COMPLETE!" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Cyan
@@ -319,5 +299,4 @@ Write-Host "  NOTE: The ALB root redirects to S3." -ForegroundColor Yellow
 Write-Host "  JS calls the ALB for /api/* behind the scenes." -ForegroundColor Yellow
 Write-Host "============================================================" -ForegroundColor Cyan
 
-# Cleanup temp files
 Remove-Item -Recurse -Force $TempDir -ErrorAction SilentlyContinue
