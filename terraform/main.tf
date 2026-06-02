@@ -23,7 +23,7 @@ resource "aws_vpc" "main" {
   tags = { Name = "notes-app-vpc" }
 }
 
-# Public subnets (2 AZs)
+# Public subnets
 resource "aws_subnet" "public" {
   count             = 2
   vpc_id            = aws_vpc.main.id
@@ -33,7 +33,7 @@ resource "aws_subnet" "public" {
   tags = { Name = "notes-public-${count.index + 1}" }
 }
 
-# Private subnets (2 AZs — for RDS)
+# Private subnets 
 resource "aws_subnet" "private" {
   count             = 2
   vpc_id            = aws_vpc.main.id
@@ -48,13 +48,13 @@ resource "aws_internet_gateway" "main" {
   tags   = { Name = "notes-app-igw" }
 }
 
-# Elastic IP for NAT Gateway
+
 resource "aws_eip" "nat" {
   domain = "vpc"
   tags   = { Name = "notes-app-nat-eip" }
 }
 
-# NAT Gateway (in public subnet 1)
+# NAT Gateway 
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
   subnet_id     = aws_subnet.public[0].id
@@ -77,7 +77,7 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# Private route table → NAT Gateway
+# Private route table
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
   route {
