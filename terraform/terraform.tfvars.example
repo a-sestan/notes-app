@@ -1,6 +1,0 @@
-region         = "us-east-1"
-instance_type  = "t2.micro"
-db_username    = "notesuser"
-db_password    = "YourRDSpassword123"
-db_name        = "notesdb"
-key_name       = "your-key-pair-name"

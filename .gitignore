@@ -1,27 +1,29 @@
+# Credentials & keys
 notes-app-key.pem
 *.pem
 *.pub
 
+# Dependencies
 node_modules/
 
+# Environment / secrets
 .env
-*.tfvars
-!terraform/terraform.tfvars.example
 
-
+# OS
 .DS_Store
 Thumbs.db
 
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 
+# Python
 __pycache__/
 *.pyc
 *.pyo
 
-.terraform/
-
+# Temp
 temp/
 tmp/

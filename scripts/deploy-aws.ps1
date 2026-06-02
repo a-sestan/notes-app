@@ -18,11 +18,13 @@ Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "  Deploy Notes App to AWS (AWS CLI)" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 
+# ─── 1. Create S3 bucket for frontend ───
 Write-Host "`n[1/7] Creating S3 bucket for frontend..." -ForegroundColor Yellow
 $BucketName = "notes-app-frontend-$(Get-Random -Minimum 1000 -Maximum 9999)"
 aws s3 mb "s3://$BucketName" --region $Region
 aws s3 website "s3://$BucketName" --index-document index.html --region $Region
 
+# Public bucket policy
 $Policy = @"
 {
   "Version": "2012-10-17",
@@ -40,6 +42,7 @@ aws s3api put-public-access-block --bucket $BucketName --public-access-block-con
 
 Write-Host "  S3 bucket created: $BucketName" -ForegroundColor Green
 
+# ─── 2. Create RDS MySQL instance ───
 Write-Host "`n[2/7] Creating RDS MySQL instance..." -ForegroundColor Yellow
 $RdsEndpoint = aws rds create-db-instance `
     --db-instance-identifier notes-db `
@@ -56,11 +59,13 @@ $RdsEndpoint = aws rds create-db-instance `
     --output text `
     --region $Region
 
+# Wait for RDS to be available
 Write-Host "  Waiting for RDS to be available (this takes ~5-10 min)..." -ForegroundColor Yellow
 aws rds wait db-instance-available --db-instance-identifier notes-db --region $Region
 $RdsEndpoint = aws rds describe-db-instances --db-instance-identifier notes-db --query "DBInstance.Endpoint.Address" --output text --region $Region
 Write-Host "  RDS endpoint: $RdsEndpoint" -ForegroundColor Green
 
+# ─── 3. Create Security Groups ───
 Write-Host "`n[3/7] Creating Security Groups..." -ForegroundColor Yellow
 
 $AlbSgId = aws ec2 create-security-group --group-name notes-alb-sg --description "ALB SG" --vpc-id $VpcId --query "GroupId" --output text --region $Region
@@ -75,22 +80,28 @@ $RdsSgId = aws ec2 create-security-group --group-name notes-rds-sg --description
 aws ec2 authorize-security-group-ingress --group-id $RdsSgId --protocol tcp --port 3306 --source-group $BackendSgId --region $Region
 Write-Host "  RDS SG: $RdsSgId" -ForegroundColor Green
 
+# ─── 4. Build and upload backend Docker image to ECR ───
 Write-Host "`n[4/7] Building and pushing backend Docker image to ECR..." -ForegroundColor Yellow
 
+# Create ECR repo
 aws ecr create-repository --repository-name notes-backend --region $Region --query "repository.repositoryUri" --output text
 $AccountId = aws sts get-caller-identity --query "Account" --output text
 $EcrUri = "$AccountId.dkr.ecr.$Region.amazonaws.com/notes-backend"
 
+# Authenticate Docker to ECR
 aws ecr get-login-password --region $Region | docker login --username AWS --password-stdin $EcrUri
 
+# Build Docker image
 docker build -t notes-backend "$ProjectRoot\backend"
 docker tag notes-backend:latest "$EcrUri`:latest"
 docker push "$EcrUri`:latest"
 
 Write-Host "  Image pushed to: $EcrUri" -ForegroundColor Green
 
+# ─── 5. Launch EC2 instances (2x) ───
 Write-Host "`n[5/7] Launching 2 EC2 instances..." -ForegroundColor Yellow
 
+# Create userdata script
 $UserData = @"
 #!/bin/bash
 set -ex
@@ -123,6 +134,7 @@ cd /home/ec2-user/notes-app
 docker compose up -d
 "@
 
+# Encode userdata
 $UserDataBase64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($UserData))
 
 $AmiId = aws ssm get-parameters --names /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 --query "Parameters[0].Value" --output text --region $Region
@@ -150,6 +162,7 @@ Write-Host "  Waiting for EC2 instances to be running..." -ForegroundColor Yello
 aws ec2 wait instance-running --instance-ids $InstanceIds --region $Region
 Write-Host "  EC2 instances are running!" -ForegroundColor Green
 
+# ─── 6. Create ALB and Target Group ───
 Write-Host "`n[6/7] Creating ALB and Target Group..." -ForegroundColor Yellow
 
 $TargetGroupArn = aws elbv2 create-target-group `
@@ -166,6 +179,7 @@ $TargetGroupArn = aws elbv2 create-target-group `
     --output text `
     --region $Region
 
+# Register EC2 instances with target group
 $Targets = $InstanceIds | ForEach-Object { @{Id=$_} }
 aws elbv2 register-targets --target-group-arn $TargetGroupArn --targets ($InstanceIds | ForEach-Object { "Id=$_" }) --region $Region
 
@@ -190,8 +204,10 @@ aws elbv2 create-listener `
 
 Write-Host "  ALB DNS: http://$AlbDns" -ForegroundColor Green
 
+# ─── 7. Upload frontend to S3 and update API_BASE ───
 Write-Host "`n[7/7] Uploading frontend to S3..." -ForegroundColor Yellow
 
+# Update script.js with ALB DNS
 $ScriptJsPath = "$ProjectRoot\frontend\script.js"
 (Get-Content $ScriptJsPath) -replace "const API_BASE = '';", "const API_BASE = 'http://$AlbDns';" | Set-Content $ScriptJsPath
 
@@ -201,6 +217,7 @@ aws s3 cp "$ProjectRoot\frontend\script.js"  "s3://$BucketName/script.js"  --con
 
 $WebsiteUrl = "http://$BucketName.s3-website-$Region.amazonaws.com"
 
+# ─── Summary ───
 Write-Host "`n============================================" -ForegroundColor Cyan
 Write-Host "  DEPLOYMENT COMPLETE!" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Cyan

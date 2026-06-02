@@ -1,5 +1,11 @@
+#!/bin/bash
+# ============================================================
+# deploy-all.sh — Deploy Notes App to AWS Academy (bash version)
+# Usage: ./deploy-all.sh -k ACCESS_KEY -s SECRET_KEY -t SESSION_TOKEN -p KEY_PATH
+# ============================================================
 set -e
 
+# ─── Parse args ───
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -k) ACCESS_KEY="$2"; shift 2 ;;
@@ -29,6 +35,7 @@ echo "============================================"
 echo "  Notes App — AWS Deployment"
 echo "============================================"
 
+# ─── 0. Configure AWS ───
 echo ""
 echo "=== [0/8] Configuring AWS CLI ==="
 aws configure set aws_access_key_id     "$ACCESS_KEY"
@@ -38,12 +45,14 @@ aws configure set region                "$REGION"
 ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 echo "  ✓ Account: $ACCOUNT_ID / Region: $REGION"
 
+# ─── 1. Import SSH key ───
 echo ""
 echo "=== [1/8] Importing SSH key pair ==="
 ssh-keygen -y -f "$KEY_PATH" > "$TEMP_DIR/key.pub" 2>/dev/null
 aws ec2 import-key-pair --key-name "$KEY_NAME" --public-key-material "fileb://$TEMP_DIR/key.pub" 2>/dev/null || true
 echo "  ✓ Key pair: $KEY_NAME"
 
+# ─── 2. Discover VPC ───
 echo ""
 echo "=== [2/8] Discovering VPC & subnets ==="
 VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text)
@@ -51,6 +60,7 @@ echo "  ✓ VPC: $VPC_ID"
 SUBNET_IDS=($(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" "Name=map-public-ip-on-launch,Values=true" --query "Subnets[*].SubnetId" --output text))
 echo "  ✓ Subnets: ${SUBNET_IDS[*]}"
 
+# ─── 3. Security Groups ───
 echo ""
 echo "=== [3/8] Creating Security Groups ==="
 ALB_SG=$(aws ec2 create-security-group --group-name notes-alb-sg --description "ALB SG" --vpc-id "$VPC_ID" --query "GroupId" --output text)
@@ -66,6 +76,7 @@ RDS_SG=$(aws ec2 create-security-group --group-name notes-rds-sg --description "
 aws ec2 authorize-security-group-ingress --group-id "$RDS_SG" --protocol tcp --port 3306 --source-group "$BACK_SG" >/dev/null
 echo "  ✓ RDS SG: $RDS_SG"
 
+# ─── 4. RDS ───
 echo ""
 echo "=== [4/8] Creating RDS MySQL instance ==="
 aws rds create-db-instance \
@@ -85,6 +96,7 @@ RDS_EP=$(aws rds describe-db-instances --db-instance-identifier notes-db --query
 echo "  ✓ RDS endpoint: $RDS_EP"
 sleep 30
 
+# ─── 5. S3 ───
 echo ""
 echo "=== [5/8] Creating S3 bucket ==="
 BUCKET="notes-app-frontend-$RANDOM"
@@ -108,9 +120,11 @@ aws s3api put-public-access-block --bucket "$BUCKET" --public-access-block-confi
 S3_URL="http://$BUCKET.s3-website-$REGION.amazonaws.com"
 echo "  ✓ S3 bucket: $BUCKET"
 
+# ─── 6. EC2 ───
 echo ""
 echo "=== [6/8] Launching 2 EC2 instances ==="
 
+# Build userdata with embedded app.py
 APP_PY=$(cat "$PROJECT_DIR/backend/app.py")
 
 cat > "$TEMP_DIR/userdata.sh" <<EOF
@@ -174,6 +188,7 @@ echo "  ⏳ Waiting for instances to reach running state..."
 aws ec2 wait instance-running --instance-ids "${INSTANCES[@]}"
 echo "  ✓ Instances running"
 
+# ─── 7. ALB ───
 echo ""
 echo "=== [7/8] Creating ALB & Target Group ==="
 
@@ -205,6 +220,7 @@ ALB_ARN=$(aws elbv2 create-load-balancer \
 ALB_DNS=$(aws elbv2 describe-load-balancers --load-balancer-arns "$ALB_ARN" --query "LoadBalancers[0].DNSName" --output text)
 echo "  ✓ ALB DNS: http://$ALB_DNS"
 
+# Listener with default redirect
 cat > "$TEMP_DIR/default-action.json" <<EOF
 [{
   "Type": "redirect",
@@ -225,6 +241,7 @@ L_ARN=$(aws elbv2 create-listener \
     --query "Listeners[0].ListenerArn" \
     --output text)
 
+# Rule for /api/* -> backend
 cat > "$TEMP_DIR/api-action.json" <<EOF
 [{
   "Type": "forward",
@@ -245,6 +262,7 @@ aws elbv2 create-rule \
 
 echo "  ✓ ALB listener configured"
 
+# ─── 8. Upload frontend ───
 echo ""
 echo "=== [8/8] Uploading frontend to S3 ==="
 
@@ -258,6 +276,7 @@ echo "  ✓ Frontend uploaded"
 echo "  ⏳ Waiting for targets to become healthy (~90s)..."
 sleep 90
 
+# ─── Summary ───
 echo ""
 echo "============================================================"
 echo "  DEPLOYMENT COMPLETE!"
