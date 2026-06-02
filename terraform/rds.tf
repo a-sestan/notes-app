@@ -1,4 +1,3 @@
-# DB subnet group (private subnets)
 resource "aws_db_subnet_group" "notes" {
   name       = "notes-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
